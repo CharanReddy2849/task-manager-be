@@ -60,7 +60,6 @@ exports.getTaskList = async (req, res, next) => {
     });
 
   } catch (err) {
-    console.error("Error fetching tasks:", err);
     res.status(401).json({ message: "Not successful", error: err.message });
   }
 };
@@ -121,7 +120,6 @@ exports.markTaskAsCompleted = async (req, res) => {
     const taskId = req.query.id;
     const token = req?.headers?.authorization;
     const user = jwt.verify(token, jwtSecret);
-    console.log(user, taskId)
     const task = await Task.findOne({
       _id: new mongoose.Types.ObjectId(taskId),
       userId: new mongoose.Types.ObjectId(user.id),
@@ -138,7 +136,6 @@ exports.markTaskAsCompleted = async (req, res) => {
       task,
     });
   } catch (err) {
-    console.error("Error completing task:", err);
     res.status(500).json({ message: "Failed to mark task as completed", error: err.message });
   }
 };
