@@ -1,11 +1,13 @@
 const Task = require("../model/Task");
+const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const jwtSecret = "80fP2W6qPXorIp7apPfY4iRL8";
 
 exports.createTask = async (req, res, next) => {
-  const { title, status, tags, category, description, userId } = req.body;
-
-  await Task.create({title, status, tags, category, description, userId})
+  const { title, status, tags, category, description } = req.body;
+  const token = req?.headers?.authorization;
+  const user = jwt.verify(token, jwtSecret);
+  await Task.create({ title, status, tags, category, description, userId: user.id })
     .then((task) => {
       res.status(201).json({
         message: "Task created successfully",
@@ -21,78 +23,89 @@ exports.createTask = async (req, res, next) => {
 };
 
 exports.getTaskList = async (req, res, next) => {
-  const skip = req.query.skip || 0;
-  const limit = req.query.limit || 10;
-  const searchQuery = req.query.search || '';
-  const token = req?.headers?.authorization?.split(" ")[1];
+  try {
+    const skip = parseInt(req.query.skip) || 0;
+    const limit = parseInt(req.query.limit) || 10;
+    const searchQuery = req.query.search || '';
+    const token = req?.headers?.authorization;
     const user = jwt.verify(token, jwtSecret);
-    console.log(user)
-  res
-  .status(200)
-  .json({ message: "Data fetched successfully", ...char[0], });
-//   await Task.aggregate([
-//         { 
-//         $match: { 
-//             userId: userId,
-//             $or: [
-//             { name: { $regex: searchQuery, $options: "i" } }, 
-//             { nick_name: { $regex: searchQuery, $options: "i" } }
-//             ]
-//         } 
-//         },
-//         {
-//         $facet: {
-//             count: [{ $count: "value" }],
-//             data: [{ $sort: { _id: -1 } }, { $skip: parseInt(skip) }, { $limit: parseInt(limit) }]
-//         }
-//         },
-//         { $unwind: "$count" },
-//         { $set: { count: "$count.value" } }
-//   ]).then((char) => {
-//       res
-//         .status(200)
-//         .json({ message: "Data fetched successfully", ...char[0], });
-//     })
-//     .catch((err) =>
-//       res.status(401).json({ message: "Not successful", error: err.message })
-//     );
+
+    const task = await Task.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(user.id),
+          $or: [
+            { title: { $regex: searchQuery, $options: "i" } },
+            { category: { $regex: searchQuery, $options: "i" } }
+          ]
+        }
+      },
+      {
+        $facet: {
+          count: [{ $count: "value" }],
+          data: [
+            { $sort: { _id: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+          ]
+        }
+      },
+      { $unwind: { path: "$count", preserveNullAndEmptyArrays: true } },
+      { $set: { count: { $ifNull: ["$count.value", 0] } } }
+    ]);
+
+    res.status(200).json({
+      message: "Data fetched successfully",
+      task: task[0] || { count: 0, data: [] }
+    });
+
+  } catch (err) {
+    console.error("Error fetching tasks:", err);
+    res.status(401).json({ message: "Not successful", error: err.message });
+  }
 };
 
-exports.updateChar = async (req, res, next) => {
-  const { id, char_data } = req.body;
+exports.updateTask = async (req, res, next) => {
+  const { id, taskData } = req.body;
 
-  if (!id || !char_data) {
+  if (!id || !taskData) {
     return res.status(400).json({
       message: "Send proper Data",
     });
   };
+  const token = req?.headers?.authorization;
+  const user = jwt.verify(token, jwtSecret);
+  const payload = {
+    ...taskData,
+    userId: user.id
+  }
   try {
-    await Fiction.findByIdAndUpdate(id, {
-      ...char_data
+    await Task.findByIdAndUpdate(id, {
+      ...payload
     }).then((ele) => {
       res.status(200).json({
-        message: "character updated successfully",
-        data: ele
+        message: "Task updated successfully",
+        data: payload
       });
     });
   } catch (err) {
     res.status(400).json({
-      message: "Failed to update character",
+      message: "Failed to update Task",
       error: err
     });
   };
 };
 
-exports.deleteChar = async (req, res, next) => {
-  const { id } = req.query;
-  await Fiction.findByIdAndDelete(id)
-    .then((char) => {
-      if (!char) {
-        res.status(400).json({ message: "Character is not found" });
+exports.deleteTask = async (req, res, next) => {
+  const { id } = req.body;
+  await Task.findByIdAndDelete(id)
+    .then((task) => {
+      if (!task) {
+        res.status(400).json({ message: "Task not found" });
       } else {
         res
           .status(201)
-          .json({ message: "Character deleted successfully", char });
+          .json({ message: "Task deleted successfully", task });
       }
     })
     .catch((error) =>
@@ -101,3 +114,32 @@ exports.deleteChar = async (req, res, next) => {
         .json({ message: "An error occurred", error: error.message })
     );
 };
+
+
+exports.markTaskAsCompleted = async (req, res) => {
+  try {
+    const taskId = req.query.id;
+    const token = req?.headers?.authorization;
+    const user = jwt.verify(token, jwtSecret);
+    console.log(user, taskId)
+    const task = await Task.findOne({
+      _id: new mongoose.Types.ObjectId(taskId),
+      userId: new mongoose.Types.ObjectId(user.id),
+    });
+    if (!task) {
+      return res.status(404).json({ message: "Task not found or unauthorized" });
+    }
+
+    task.status = "completed";
+    await task.save();
+
+    res.status(200).json({
+      message: "Task marked as completed",
+      task,
+    });
+  } catch (err) {
+    console.error("Error completing task:", err);
+    res.status(500).json({ message: "Failed to mark task as completed", error: err.message });
+  }
+};
+
