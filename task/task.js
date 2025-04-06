@@ -27,6 +27,7 @@ exports.getTaskList = async (req, res, next) => {
     const skip = parseInt(req.query.skip) || 0;
     const limit = parseInt(req.query.limit) || 10;
     const searchQuery = req.query.search || '';
+    const status = req.query.status || '';
     const token = req?.headers?.authorization;
     const user = jwt.verify(token, jwtSecret);
 
@@ -36,7 +37,7 @@ exports.getTaskList = async (req, res, next) => {
           userId: new mongoose.Types.ObjectId(user.id),
           $or: [
             { title: { $regex: searchQuery, $options: "i" } },
-            { category: { $regex: searchQuery, $options: "i" } }
+            { status: { $regex: status, $options: "i" } }
           ]
         }
       },
