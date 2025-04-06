@@ -10,7 +10,7 @@ const PORT = 5000;
 connectDB();
 
 app.use(cors({
-  origin: 'http://localhost:4200',
+  origin: 'https://task-manager-fe-rho.vercel.app',
 }));
 
 app.use(express.json());
