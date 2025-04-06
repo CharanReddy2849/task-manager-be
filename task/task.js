@@ -31,16 +31,20 @@ exports.getTaskList = async (req, res, next) => {
     const token = req?.headers?.authorization;
     const user = jwt.verify(token, jwtSecret);
 
+    const matchStage = {
+      userId: new mongoose.Types.ObjectId(user.id)
+    };
+    
+    if (searchQuery) {
+      matchStage.title = { $regex: searchQuery, $options: 'i' };
+    }
+    
+    if (status) {
+      matchStage.status = { $regex: status, $options: 'i' };
+    }
+
     const task = await Task.aggregate([
-      {
-        $match: {
-          userId: new mongoose.Types.ObjectId(user.id),
-          $or: [
-            { title: { $regex: searchQuery, $options: "i" } },
-            { status: { $regex: status, $options: "i" } }
-          ]
-        }
-      },
+      { $match: matchStage },
       {
         $facet: {
           count: [{ $count: "value" }],
